@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 
     # Third-party
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'drf_spectacular',
 
@@ -147,12 +148,19 @@ MAILERS = {
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "events.exceptions.custom_exception_handler",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Planificador de Eventos API",
     "DESCRIPTION": "API REST del Organizador de Eventos Independientes",
     "VERSION": "1.0.0",
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
 }
 
 CORS_ALLOWED_ORIGINS = [

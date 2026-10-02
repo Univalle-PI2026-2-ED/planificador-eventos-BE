@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -10,8 +11,18 @@ class Evento(models.Model):
 
     nombre = models.CharField(max_length=200)
     fecha = models.DateField(help_text="Fecha del evento (YYYY-MM-DD)")
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="eventos",
+        null=True,
+        blank=True,
+        help_text="Dueño del evento",
+    )
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
+    
+
 
     class Meta:
         ordering = ["fecha"]
