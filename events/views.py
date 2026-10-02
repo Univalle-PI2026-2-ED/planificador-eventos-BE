@@ -91,10 +91,10 @@ class GestionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
-            return Evento.objects.none()
-        return Evento.objects.filter(
-            usuario=self.request.user
-        ).prefetch_related("gestiones")
+            return Gestion.objects.none()
+        return Gestion.objects.filter(
+            evento__usuario=self.request.user
+        ).select_related("evento")
 
     def perform_create(self, serializer):
         evento_id = self.request.data.get("evento")
