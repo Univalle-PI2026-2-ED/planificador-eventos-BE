@@ -87,17 +87,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres.swxpbvcmnovkoxjxrpvu',
-        'PASSWORD': '3K7gQiZkeNuF',
-        'HOST': 'aws-0-us-east-2.pooler.supabase.com',
-        'PORT': '5432',
+# Las credenciales NUNCA van en el código: se leen del entorno (.env en local,
+# variables de entorno en Render).
+# USE_SQLITE=True solo para correr tests/desarrollo sin tocar Supabase.
+if os.getenv("USE_SQLITE", "False").lower() == "true":
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'postgres'),
+            'USER': os.environ['DB_USER'],
+            'PASSWORD': os.environ['DB_PASSWORD'],
+            'HOST': os.environ['DB_HOST'],
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
