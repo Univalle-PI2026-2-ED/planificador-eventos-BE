@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status, viewsets
 from rest_framework.authtoken.models import Token
@@ -9,11 +12,18 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
+from .exceptions import ConflictoSobrecarga
 from .models import Evento, Gestion, PreferenciasUsuario
 
 from .serializers import (
     AuthRespuestaSerializer,
+    ConflictoRespuestaSerializer,
     ErrorRespuestaSerializer,
     EventoSerializer,
     GestionHoySerializer,
@@ -22,8 +32,8 @@ from .serializers import (
     LoginSerializer,
     PreferenciasSerializer,
     RegistroSerializer,
+    ReprogramarSerializer,
 )
-
 @extend_schema(
     tags=["health"],
     summary="Estado de la API",
@@ -45,6 +55,12 @@ class EventoViewSet(viewsets.ModelViewSet):
     POST /api/eventos/<id>/subtareas/
 
     Cada usuario solo ve y modifica sus propios eventos.
+
+    **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+    con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+    gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+    gestiones que no se mencionan no se tocan; para borrar una se usa
+    DELETE /api/gestiones/<id>/.
     """
     serializer_class = EventoSerializer
 
@@ -72,21 +88,15 @@ class EventoViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(evento=evento)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
 class GestionViewSet(viewsets.ModelViewSet):
     """
     GET/POST /api/gestiones/
     GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+    POST /api/gestiones/<id>/reprogramar/
 
-    Solo se ven las gestiones de eventos que pertenecen al usuario.
-
-    El POST plano requiere 'evento' en el body (id del evento al que
-    pertenece). Para agregar una gestión a un evento ya identificado en
-    la UI, es más cómodo usar POST /api/eventos/<id>/subtareas/ de arriba.
-
-    El resto (marcarGestion, guardarNota, reprogramarGestion,
-    posponerGestion) son PATCH sobre una gestión existente.
+    Editar, marcar y guardar nota son PATCH sobre una gestión existente
+    (el PATCH no revisa el límite de horas). Para mover una gestión de día
+    cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
     """
     serializer_class = GestionSerializer
 
@@ -106,13 +116,117 @@ class GestionViewSet(viewsets.ModelViewSet):
                     "o usa POST /api/eventos/<id>/subtareas/ en su lugar."
                 ]
             })
-        # Solo se puede agregar gestiones a eventos propios
         evento = get_object_or_404(
             Evento, pk=evento_id, usuario=self.request.user
         )
         serializer.save(evento=evento)
 
+    @extend_schema(
+        tags=["gestiones"],
+        summary="Reprogramar una gestión cuidando el límite diario",
+        description=(
+            "Mueve la gestión al día `fecha` (y opcionalmente cambia `hora` y "
+            "`horas`) y la deja en estado **pendiente**.\n\n"
+            "Antes de mover, suma las horas de las gestiones del usuario que "
+            "ya están ese día (sin contar las `hecho` ni la gestión que se "
+            "mueve) más las horas de esta gestión. Si el total pasa el límite "
+            "del evento (`limite_horas`) responde **409** con `fecha`, `horas` "
+            "(total del día con esta gestión), `limite`, `exceso` y "
+            "`gestiones` (las que ya cuentan ese día) dentro de "
+            "`error.details`, y no guarda nada.\n\n"
+            "Para mover igual aunque se pase del límite, el frontend usa el "
+            "PATCH genérico `/api/gestiones/<id>/`, que no valida el límite."
+        ),
+        request=ReprogramarSerializer,
+        responses={
+            200: GestionSerializer,
+            400: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="Fecha faltante o inválida, u horas fuera de 0,5–8.",
+            ),
+            401: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="Falta el token de autenticación.",
+            ),
+            404: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="La gestión no existe o no es del usuario.",
+            ),
+            409: OpenApiResponse(
+                response=ConflictoRespuestaSerializer,
+                description="El día destino superaría el límite de horas.",
+                examples=[
+                    OpenApiExample(
+                        "Día sobrecargado",
+                        value={
+                            "success": False,
+                            "error": {
+                                "status": 409,
+                                "message": "Ese día superaría tu límite de horas diario.",
+                                "details": {
+                                    "fecha": "2026-10-12",
+                                    "horas": 7.5,
+                                    "limite": 6.0,
+                                    "exceso": 1.5,
+                                    "gestiones": [
+                                        {
+                                            "id": 14,
+                                            "nombre": "Confirmar catering",
+                                            "fecha": "2026-10-12",
+                                            "hora": "09:00:00",
+                                            "horas": "4.00",
+                                            "estado": "pendiente",
+                                            "nota": "",
+                                            "evento": {"id": 3, "nombre": "Boda de Ana y Luis"},
+                                        }
+                                    ],
+                                },
+                            },
+                        },
+                    )
+                ],
+            ),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="reprogramar")
+    def reprogramar(self, request, pk=None):
+        gestion = self.get_object()  # ya viene filtrado por usuario
+        entrada = ReprogramarSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        datos = entrada.validated_data
 
+        fecha = datos["fecha"]
+        horas = datos.get("horas", gestion.horas)
+        limite = gestion.evento.limite_horas
+
+        with transaction.atomic():
+            del_dia = list(
+                Gestion.objects.filter(evento__usuario=request.user, fecha=fecha)
+                .exclude(estado=Gestion.Estado.HECHO)
+                .exclude(pk=gestion.pk)
+                .select_related("evento")
+                .order_by("hora")
+            )
+            ya_planeado = sum((g.horas for g in del_dia), Decimal("0"))
+            total = ya_planeado + horas
+
+            if total > limite:
+                raise ConflictoSobrecarga({
+                    "fecha": fecha.isoformat(),
+                    "horas": float(total),
+                    "limite": float(limite),
+                    "exceso": float(total - limite),
+                    "gestiones": GestionHoySerializer(del_dia, many=True).data,
+                })
+
+            gestion.fecha = fecha
+            gestion.horas = horas
+            if "hora" in datos:
+                gestion.hora = datos["hora"]
+            gestion.estado = Gestion.Estado.PENDIENTE
+            gestion.save()
+
+        return Response(GestionSerializer(gestion).data)
 
 class RegistroView(generics.GenericAPIView):
     """POST /api/auth/registro/

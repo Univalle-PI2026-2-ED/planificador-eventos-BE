@@ -1,3 +1,5 @@
+from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.views import exception_handler as drf_exception_handler
 
 # Mensajes en español, sin jerga técnica, para que el frontend los pueda
@@ -8,9 +10,27 @@ _FRIENDLY_MESSAGES = {
     403: "No tienes permiso para hacer esto.",
     404: "No se encontró el recurso solicitado.",
     405: "Ese método no está permitido en este endpoint.",
+    409: "Ese día superaría tu límite de horas diario.",
     429: "Demasiadas solicitudes, intenta de nuevo en un momento.",
     500: "Ocurrió un error inesperado en el servidor.",
 }
+
+
+class ConflictoSobrecarga(APIException):
+    """409: reprogramar una gestión haría que el día destino pase el límite de horas.
+
+    Recibe un dict con fecha, horas, limite, exceso y gestiones. Se guarda tal
+    cual en `detail` (DRF lo convertiría todo a texto) para que los números
+    lleguen al frontend como números.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "El día destino supera el límite de horas."
+    default_code = "sobrecarga_diaria"
+
+    def __init__(self, detalle):
+        super().__init__(detail=detalle)
+        self.detail = detalle
 
 
 def custom_exception_handler(exc, context):

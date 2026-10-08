@@ -1,9 +1,13 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from django.contrib.auth import authenticate, password_validation
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
+from django.db import transaction
 
 from .models import (
     LIMITE_HORAS_DEFECTO,
@@ -13,6 +17,20 @@ from .models import (
     Gestion,
     PreferenciasUsuario,
 )
+
+
+HORAS_GESTION_MIN = Decimal("0.5")
+HORAS_GESTION_MAX = Decimal("8")
+CAMPOS_GESTION_OBLIGATORIOS = ("nombre", "fecha", "hora", "horas")
+
+
+def validar_horas_gestion(value):
+    """Horas estimadas de una gestión: entre 0,5 y 8."""
+    if value < HORAS_GESTION_MIN or value > HORAS_GESTION_MAX:
+        raise serializers.ValidationError(
+            "El tiempo estimado debe estar entre 0,5 y 8 horas."
+        )
+    return value
 
 
 def _campo_limite_horas(**kwargs):
@@ -45,15 +63,18 @@ class GestionSerializer(serializers.ModelSerializer):
         return value.strip()
 
     def validate_horas(self, value):
-        if value <= 0:
-            raise serializers.ValidationError(
-                "El tiempo estimado debe ser un número mayor a 0."
-            )
-        return value
+        return validar_horas_gestion(value)
+
+
+class GestionEventoSerializer(GestionSerializer):
+    """Gestión dentro de un evento. Acepta 'id' para editar una gestión que
+    ya existe; sin 'id' se crea una nueva."""
+
+    id = serializers.IntegerField(required=False)
 
 
 class EventoSerializer(serializers.ModelSerializer):
-    gestiones = GestionSerializer(many=True)
+    gestiones = GestionEventoSerializer(many=True)
     # Opcional: si no llega, se usa el límite guardado en las preferencias del usuario
     limite_horas = _campo_limite_horas(required=False)
 
@@ -78,10 +99,30 @@ class EventoSerializer(serializers.ModelSerializer):
         return nombre
 
     def validate_gestiones(self, value):
-        if not value:
-            raise serializers.ValidationError(
-                "Añade al menos una gestión al plan."
-            )
+        if self.instance is None:
+            # Al crear, el plan necesita al menos una gestión. Al editar, la
+            # lista solo trae las gestiones a agregar o modificar.
+            if not value:
+                raise serializers.ValidationError(
+                    "Añade al menos una gestión al plan."
+                )
+            return value
+
+        propias = set(self.instance.gestiones.values_list("id", flat=True))
+        for datos in value:
+            gestion_id = datos.get("id")
+            if gestion_id is None:
+                # Nueva gestión: en PATCH el serializador anidado no exige
+                # campos, así que se revisan aquí para no fallar al guardar.
+                faltan = [c for c in CAMPOS_GESTION_OBLIGATORIOS if c not in datos]
+                if faltan:
+                    raise serializers.ValidationError(
+                        "Cada gestión nueva necesita: " + ", ".join(faltan) + "."
+                    )
+            elif gestion_id not in propias:
+                raise serializers.ValidationError(
+                    f"La gestión {gestion_id} no pertenece a este evento."
+                )
         return value
 
     def create(self, validated_data):
@@ -95,21 +136,42 @@ class EventoSerializer(serializers.ModelSerializer):
             )
         evento = Evento.objects.create(**validated_data)
         Gestion.objects.bulk_create(
-            [Gestion(evento=evento, **g) for g in gestiones_data]
+            [
+                Gestion(evento=evento, **{k: v for k, v in g.items() if k != "id"})
+                for g in gestiones_data
+            ]
         )
         return evento
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        # Las gestiones se crean/editan/borran por su propio endpoint
-        # (/api/gestiones/<id>/), no reemplazando la lista completa aquí.
-        validated_data.pop("gestiones", None)
+        """Edita el evento y su plan.
+
+        'gestiones' es opcional: cada elemento con 'id' edita esa gestión y
+        cada elemento sin 'id' crea una nueva. Las gestiones que no se
+        mencionan quedan como están (borrar sigue siendo
+        DELETE /api/gestiones/<id>/).
+        """
+        gestiones_data = validated_data.pop("gestiones", None)
         instance.nombre = validated_data.get("nombre", instance.nombre)
         instance.fecha = validated_data.get("fecha", instance.fecha)
         instance.limite_horas = validated_data.get("limite_horas", instance.limite_horas)
         instance.save()
+
+        if gestiones_data:
+            existentes = {g.id: g for g in instance.gestiones.all()}
+            nuevas = []
+            for datos in gestiones_data:
+                gestion_id = datos.pop("id", None)
+                if gestion_id is None:
+                    nuevas.append(Gestion(evento=instance, **datos))
+                else:
+                    gestion = existentes[gestion_id]
+                    for campo, valor in datos.items():
+                        setattr(gestion, campo, valor)
+                    gestion.save()
+            Gestion.objects.bulk_create(nuevas)
         return instance
-
-
 class PreferenciasSerializer(serializers.ModelSerializer):
     limite_horas = _campo_limite_horas()
 
@@ -117,6 +179,22 @@ class PreferenciasSerializer(serializers.ModelSerializer):
         model = PreferenciasUsuario
         fields = ["limite_horas"]
 
+class ReprogramarSerializer(serializers.Serializer):
+    """Datos para mover una gestión a otro día."""
+
+    fecha = serializers.DateField(help_text="Día destino (YYYY-MM-DD)")
+    hora = serializers.TimeField(
+        required=False, help_text="Nueva hora (HH:MM). Si se omite, conserva la actual."
+    )
+    horas = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        required=False,
+        help_text="Nuevas horas estimadas (0,5 a 8). Si se omite, conserva las actuales.",
+    )
+
+    def validate_horas(self, value):
+        return validar_horas_gestion(value)
 
 class RegistroSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
@@ -236,7 +314,28 @@ class ErrorRespuestaSerializer(serializers.Serializer):
     success = serializers.BooleanField(default=False)
     error = ErrorDetalleSerializer()
 
+class ConflictoSobrecargaDetalleSerializer(serializers.Serializer):
+    fecha = serializers.DateField(help_text="Día destino que se pasaría del límite.")
+    horas = serializers.FloatField(
+        help_text="Horas que tendría ese día con la gestión incluida."
+    )
+    limite = serializers.FloatField(help_text="Límite de horas al día que se aplicó.")
+    exceso = serializers.FloatField(help_text="Horas que se pasa: horas - limite.")
+    gestiones = GestionHoySerializer(
+        many=True,
+        help_text="Gestiones que ya cuentan ese día (sin incluir la que se mueve).",
+    )
 
+
+class ConflictoErrorSerializer(serializers.Serializer):
+    status = serializers.IntegerField()
+    message = serializers.CharField()
+    details = ConflictoSobrecargaDetalleSerializer()
+
+
+class ConflictoRespuestaSerializer(serializers.Serializer):
+    success = serializers.BooleanField(default=False)
+    error = ConflictoErrorSerializer()
 class HoyGruposSerializer(serializers.Serializer):
     vencidas = GestionHoySerializer(many=True)
     para_hoy = GestionHoySerializer(many=True)
