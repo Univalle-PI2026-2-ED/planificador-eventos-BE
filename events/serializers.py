@@ -5,7 +5,31 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from .models import Evento, Gestion
+from .models import (
+    LIMITE_HORAS_DEFECTO,
+    LIMITE_HORAS_MAX,
+    LIMITE_HORAS_MIN,
+    Evento,
+    Gestion,
+    PreferenciasUsuario,
+)
+
+
+def _campo_limite_horas(**kwargs):
+    """Campo de límite de horas al día (1–12), igual que el formulario."""
+    return serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=LIMITE_HORAS_MIN,
+        max_value=LIMITE_HORAS_MAX,
+        coerce_to_string=False,  # el frontend lo recibe como número
+        error_messages={
+            "invalid": "Ingresa un límite de horas válido (por ejemplo: 8 o 8.5).",
+            "min_value": f"El límite debe ser de al menos {LIMITE_HORAS_MIN} hora.",
+            "max_value": f"El límite no puede superar {LIMITE_HORAS_MAX} horas al día.",
+        },
+        **kwargs,
+    )
 
 
 class GestionSerializer(serializers.ModelSerializer):
@@ -30,10 +54,12 @@ class GestionSerializer(serializers.ModelSerializer):
 
 class EventoSerializer(serializers.ModelSerializer):
     gestiones = GestionSerializer(many=True)
+    # Opcional: si no llega, se usa el límite guardado en las preferencias del usuario
+    limite_horas = _campo_limite_horas(required=False)
 
     class Meta:
         model = Evento
-        fields = ["id", "nombre", "fecha", "gestiones"]
+        fields = ["id", "nombre", "fecha", "limite_horas", "gestiones"]
 
     def validate_nombre(self, value):
         nombre = value.strip()
@@ -60,6 +86,13 @@ class EventoSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         gestiones_data = validated_data.pop("gestiones")
+        if "limite_horas" not in validated_data:
+            usuario = validated_data.get("usuario")
+            validated_data["limite_horas"] = (
+                PreferenciasUsuario.de_usuario(usuario).limite_horas
+                if usuario
+                else LIMITE_HORAS_DEFECTO
+            )
         evento = Evento.objects.create(**validated_data)
         Gestion.objects.bulk_create(
             [Gestion(evento=evento, **g) for g in gestiones_data]
@@ -72,9 +105,17 @@ class EventoSerializer(serializers.ModelSerializer):
         validated_data.pop("gestiones", None)
         instance.nombre = validated_data.get("nombre", instance.nombre)
         instance.fecha = validated_data.get("fecha", instance.fecha)
+        instance.limite_horas = validated_data.get("limite_horas", instance.limite_horas)
         instance.save()
         return instance
 
+
+class PreferenciasSerializer(serializers.ModelSerializer):
+    limite_horas = _campo_limite_horas()
+
+    class Meta:
+        model = PreferenciasUsuario
+        fields = ["limite_horas"]
 
 
 class RegistroSerializer(serializers.ModelSerializer):

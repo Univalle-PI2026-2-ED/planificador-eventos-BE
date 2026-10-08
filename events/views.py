@@ -10,7 +10,7 @@ from django.utils import timezone
 from datetime import timedelta
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from .models import Evento, Gestion
+from .models import Evento, Gestion, PreferenciasUsuario
 
 from .serializers import (
     AuthRespuestaSerializer,
@@ -20,6 +20,7 @@ from .serializers import (
     GestionSerializer,
     HoyRespuestaSerializer,
     LoginSerializer,
+    PreferenciasSerializer,
     RegistroSerializer,
 )
 
@@ -322,3 +323,49 @@ class HoyView(generics.GenericAPIView):
             "resumen": {nombre: len(items) for nombre, items in grupos.items()},
             "grupos": grupos,
         })
+
+class PreferenciasView(generics.RetrieveUpdateAPIView):
+    """GET/PATCH /api/preferencias/
+
+    Preferencias del usuario autenticado. Si todavía no tiene, se crean
+    con los valores por defecto (límite de 6 horas al día).
+    """
+    serializer_class = PreferenciasSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return PreferenciasUsuario.de_usuario(self.request.user)
+
+    @extend_schema(
+        tags=["preferencias"],
+        summary="Ver preferencias del usuario",
+        responses={
+            200: PreferenciasSerializer,
+            401: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="Falta el token de autenticación.",
+            ),
+        },
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        tags=["preferencias"],
+        summary="Actualizar preferencias del usuario",
+        description="Cambia el límite de horas al día (entre 1 y 12, pasos de 0.5 en el formulario).",
+        request=PreferenciasSerializer,
+        responses={
+            200: PreferenciasSerializer,
+            400: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="Límite fuera del rango 1–12 o no numérico.",
+            ),
+            401: OpenApiResponse(
+                response=ErrorRespuestaSerializer,
+                description="Falta el token de autenticación.",
+            ),
+        },
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
