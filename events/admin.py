@@ -10,7 +10,7 @@ class GestionInline(admin.TabularInline):
 
 @admin.register(Evento)
 class EventoAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "fecha", "limite_horas", "creado_en")
+    list_display = ("nombre", "fecha", "creado_en")
     search_fields = ("nombre",)
     inlines = [GestionInline]
 

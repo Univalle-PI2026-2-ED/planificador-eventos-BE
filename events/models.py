@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -7,6 +10,12 @@ LIMITE_HORAS_DEFECTO = 6
 LIMITE_HORAS_MIN = 1
 LIMITE_HORAS_MAX = 12
 
+def validar_paso_media_hora(value):
+    """El límite debe aumentar en pasos de 0,5 horas."""
+    if (Decimal(value) * 2) % 1 != 0:
+        raise ValidationError(
+            "El límite debe configurarse en incrementos de 0,5 horas."
+        )
 
 def campo_limite_horas(help_text):
     return models.DecimalField(
@@ -16,6 +25,7 @@ def campo_limite_horas(help_text):
         validators=[
             MinValueValidator(LIMITE_HORAS_MIN),
             MaxValueValidator(LIMITE_HORAS_MAX),
+            validar_paso_media_hora,
         ],
         help_text=help_text,
     )
@@ -51,8 +61,8 @@ class PreferenciasUsuario(models.Model):
 class Evento(models.Model):
     """Un evento con su plan de trabajo (gestiones logísticas).
 
-    Coincide con el shape que espera EventosContext.jsx en el frontend:
-    { id, nombre, fecha, limite_horas, gestiones: [...] }
+    Coincide con la estructura que utiliza el frontend:
+    { id, nombre, fecha, gestiones: [...] }
     """
 
     nombre = models.CharField(max_length=200)
@@ -64,9 +74,6 @@ class Evento(models.Model):
         null=True,
         blank=True,
         help_text="Dueño del evento",
-    )
-    limite_horas = campo_limite_horas(
-        "Límite de horas al día definido para este evento (entre 1 y 12)"
     )
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)

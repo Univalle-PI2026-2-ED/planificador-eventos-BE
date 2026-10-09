@@ -129,8 +129,8 @@ class GestionViewSet(viewsets.ModelViewSet):
             "`horas`) y la deja en estado **pendiente**.\n\n"
             "Antes de mover, suma las horas de las gestiones del usuario que "
             "ya están ese día (sin contar las `hecho` ni la gestión que se "
-            "mueve) más las horas de esta gestión. Si el total pasa el límite "
-            "del evento (`limite_horas`) responde **409** con `fecha`, `horas` "
+            "mueve) más las horas de esta gestión. Si el total pasa el límite diario configurado "
+            "por el usuario (`PreferenciasUsuario.limite_horas`) responde **409** con `fecha`, `horas` "
             "(total del día con esta gestión), `limite`, `exceso` y "
             "`gestiones` (las que ya cuentan ese día) dentro de "
             "`error.details`, y no guarda nada.\n\n"
@@ -197,7 +197,7 @@ class GestionViewSet(viewsets.ModelViewSet):
 
         fecha = datos["fecha"]
         horas = datos.get("horas", gestion.horas)
-        limite = gestion.evento.limite_horas
+        limite = PreferenciasUsuario.de_usuario(request.user).limite_horas
 
         with transaction.atomic():
             del_dia = list(
