@@ -19,12 +19,11 @@ class BaseApiTestCase(APITestCase):
         token, _ = Token.objects.get_or_create(user=usuario)
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
 
-    def crear_evento(self, usuario=None, nombre="Boda", limite_horas=6):
+    def crear_evento(self, usuario=None, nombre="Boda"):
         return Evento.objects.create(
             nombre=nombre,
             fecha="2026-12-01",
             usuario=usuario or self.user,
-            limite_horas=Decimal(str(limite_horas)),
         )
 
     def crear_gestion(self, evento, fecha="2026-10-12", horas="2", estado="pendiente",
@@ -77,6 +76,15 @@ class PreferenciasTests(BaseApiTestCase):
         self.client.credentials()
         self.assertEqual(self.client.get(self.url).status_code, 401)
 
+    def test_rechaza_valores_que_no_avanzan_de_media_hora(self):
+        for valor in ("1.25", "4.25", "6.75", "11.99"):
+            res = self.client.patch(
+                self.url,
+                {"limite_horas": valor},
+                format="json",
+            )
+            self.assertEqual(res.status_code, 400, valor)
+
 
 class LimiteDelEventoTests(BaseApiTestCase):
     def payload(self, **extra):
@@ -84,42 +92,82 @@ class LimiteDelEventoTests(BaseApiTestCase):
             "nombre": "Cumpleaños",
             "fecha": "2026-12-20",
             "gestiones": [
-                {"nombre": "Torta", "fecha": "2026-12-10", "hora": "10:00", "horas": "2"}
+                {
+                    "nombre": "Torta",
+                    "fecha": "2026-12-10",
+                    "hora": "10:00",
+                    "horas": "2",
+                }
             ],
         }
         data.update(extra)
         return data
 
-    def test_sin_limite_toma_el_de_preferencias_del_usuario(self):
-        self.client.patch("/api/preferencias/", {"limite_horas": "9"}, format="json")
-        res = self.client.post("/api/eventos/", self.payload(), format="json")
-        self.assertEqual(res.status_code, 201)
-        self.assertEqual(Evento.objects.get().limite_horas, Decimal("9"))
-
-    def test_crear_evento_con_limite_propio(self):
+    def test_crear_evento_no_requiere_limite_propio(self):
         res = self.client.post(
-            "/api/eventos/", self.payload(limite_horas="7.5"), format="json"
+            "/api/eventos/", self.payload(), format="json"
         )
         self.assertEqual(res.status_code, 201)
-        self.assertEqual(Evento.objects.get().limite_horas, Decimal("7.50"))
-
-    def test_limite_del_evento_fuera_de_rango(self):
-        for valor in ("0.5", "13"):
-            res = self.client.post(
-                "/api/eventos/", self.payload(limite_horas=valor), format="json"
-            )
-            self.assertEqual(res.status_code, 400, valor)
-        self.assertEqual(Evento.objects.count(), 0)
-
-    def test_editar_el_limite_del_evento_con_patch(self):
-        evento = self.crear_evento()
-        res = self.client.patch(
-            f"/api/eventos/{evento.id}/", {"limite_horas": "9"}, format="json"
+        self.assertFalse(
+            hasattr(Evento.objects.get(), "limite_horas")
         )
-        self.assertEqual(res.status_code, 200)
-        evento.refresh_from_db()
-        self.assertEqual(evento.limite_horas, Decimal("9.00"))
 
+    def test_crear_evento_no_cambia_preferencias_del_usuario(self):
+        self.client.patch(
+            "/api/preferencias/",
+            {"limite_horas": "9"},
+            format="json",
+        )
+
+        res = self.client.post(
+            "/api/eventos/", self.payload(), format="json"
+        )
+
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(
+            PreferenciasUsuario.de_usuario(self.user).limite_horas,
+            Decimal("9.00"),
+        )
+
+    def test_limite_enviado_al_evento_no_modifica_preferencias(self):
+        self.client.patch(
+            "/api/preferencias/",
+            {"limite_horas": "6"},
+            format="json",
+        )
+
+        res = self.client.post(
+            "/api/eventos/",
+            self.payload(limite_horas="7.5"),
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(
+            PreferenciasUsuario.de_usuario(self.user).limite_horas,
+            Decimal("6.00"),
+        )
+
+    def test_editar_evento_no_cambia_el_limite_global(self):
+        evento = self.crear_evento()
+
+        self.client.patch(
+            "/api/preferencias/",
+            {"limite_horas": "8"},
+            format="json",
+        )
+
+        res = self.client.patch(
+            f"/api/eventos/{evento.id}/",
+            {"nombre": "Boda actualizada"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            PreferenciasUsuario.de_usuario(self.user).limite_horas,
+            Decimal("8.00"),
+        )
 
 class HorasDeGestionTests(BaseApiTestCase):
     def setUp(self):
@@ -247,13 +295,29 @@ class ReprogramarTests(BaseApiTestCase):
         res = self.client.post(self.url(), {"fecha": "2026-10-10"}, format="json")
         self.assertEqual(res.status_code, 200)
 
-    def test_usa_el_limite_del_evento(self):
-        self.evento.limite_horas = Decimal("3")
-        self.evento.save()
-        self.crear_gestion(self.evento, fecha="2026-10-12", horas="2")
-        res = self.client.post(self.url(), {"fecha": "2026-10-12"}, format="json")
+    def test_usa_el_limite_global_del_usuario(self):
+        preferencias = PreferenciasUsuario.de_usuario(self.user)
+        preferencias.limite_horas = Decimal("3")
+        preferencias.save()
+
+        self.crear_gestion(
+            self.evento,
+            fecha="2026-10-12",
+            horas="2",
+        )
+
+        res = self.client.post(
+            self.url(),
+            {"fecha": "2026-10-12"},
+            format="json",
+        )
+
         self.assertEqual(res.status_code, 409)
-        self.assertEqual(res.json()["error"]["details"]["limite"], 3.0)
+        self.assertEqual(
+            res.json()["error"]["details"]["limite"],
+            3.0,
+        )
+
 
     def test_horas_nuevas_cuentan_para_el_limite(self):
         self.crear_gestion(self.evento, fecha="2026-10-12", horas="4")

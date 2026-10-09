@@ -1,23 +1,18 @@
 from decimal import Decimal
 
-from rest_framework import serializers
-
 from django.contrib.auth import authenticate, password_validation
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
-from django.db import transaction
-
 from .models import (
-    LIMITE_HORAS_DEFECTO,
     LIMITE_HORAS_MAX,
     LIMITE_HORAS_MIN,
     Evento,
     Gestion,
     PreferenciasUsuario,
 )
-
 
 HORAS_GESTION_MIN = Decimal("0.5")
 HORAS_GESTION_MAX = Decimal("8")
@@ -75,12 +70,10 @@ class GestionEventoSerializer(GestionSerializer):
 
 class EventoSerializer(serializers.ModelSerializer):
     gestiones = GestionEventoSerializer(many=True)
-    # Opcional: si no llega, se usa el límite guardado en las preferencias del usuario
-    limite_horas = _campo_limite_horas(required=False)
 
     class Meta:
         model = Evento
-        fields = ["id", "nombre", "fecha", "limite_horas", "gestiones"]
+        fields = ["id", "nombre", "fecha", "gestiones"]
 
     def validate_nombre(self, value):
         nombre = value.strip()
@@ -127,50 +120,57 @@ class EventoSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         gestiones_data = validated_data.pop("gestiones")
-        if "limite_horas" not in validated_data:
-            usuario = validated_data.get("usuario")
-            validated_data["limite_horas"] = (
-                PreferenciasUsuario.de_usuario(usuario).limite_horas
-                if usuario
-                else LIMITE_HORAS_DEFECTO
-            )
+
         evento = Evento.objects.create(**validated_data)
+
         Gestion.objects.bulk_create(
             [
-                Gestion(evento=evento, **{k: v for k, v in g.items() if k != "id"})
-                for g in gestiones_data
+                Gestion(
+                    evento=evento,
+                    **{k: v for k, v in gestion.items() if k != "id"},
+                )
+                for gestion in gestiones_data
             ]
         )
+
         return evento
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        """Edita el evento y su plan.
+        """Edita el evento y su plan de trabajo.
 
-        'gestiones' es opcional: cada elemento con 'id' edita esa gestión y
-        cada elemento sin 'id' crea una nueva. Las gestiones que no se
-        mencionan quedan como están (borrar sigue siendo
-        DELETE /api/gestiones/<id>/).
+        'gestiones' es opcional: cada elemento con 'id' edita esa gestión
+        y cada elemento sin 'id' crea una nueva. Las gestiones omitidas
+        quedan como están; para borrar una se usa DELETE.
         """
         gestiones_data = validated_data.pop("gestiones", None)
+
         instance.nombre = validated_data.get("nombre", instance.nombre)
         instance.fecha = validated_data.get("fecha", instance.fecha)
-        instance.limite_horas = validated_data.get("limite_horas", instance.limite_horas)
         instance.save()
 
         if gestiones_data:
-            existentes = {g.id: g for g in instance.gestiones.all()}
+            existentes = {
+                gestion.id: gestion
+                for gestion in instance.gestiones.all()
+            }
             nuevas = []
+
             for datos in gestiones_data:
                 gestion_id = datos.pop("id", None)
+
                 if gestion_id is None:
                     nuevas.append(Gestion(evento=instance, **datos))
                 else:
                     gestion = existentes[gestion_id]
+
                     for campo, valor in datos.items():
                         setattr(gestion, campo, valor)
+
                     gestion.save()
+
             Gestion.objects.bulk_create(nuevas)
+
         return instance
 class PreferenciasSerializer(serializers.ModelSerializer):
     limite_horas = _campo_limite_horas()
@@ -178,6 +178,15 @@ class PreferenciasSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreferenciasUsuario
         fields = ["limite_horas"]
+
+    def validate_limite_horas(self, value):
+        if (value * 2) % 1 != 0:
+            raise serializers.ValidationError(
+                "El límite debe estar entre 1 y 12 horas, "
+                "en incrementos de 0,5."
+            )
+
+        return value
 
 class ReprogramarSerializer(serializers.Serializer):
     """Datos para mover una gestión a otro día."""
