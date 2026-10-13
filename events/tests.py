@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from django.utils import timezone
 
 from .models import Evento, Gestion, PreferenciasUsuario
 
@@ -485,3 +486,254 @@ class EditarEventoAgregarGestionesTests(BaseApiTestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+    
+    def test_reabrir_gestion_desde_evento_borra_fecha_cierre(self):
+        self.g1.estado = "hecho"
+        self.g1.fecha_cierre = timezone.now()
+        self.g1.save()
+
+        res = self.client.patch(
+            self.url,
+            {
+                "gestiones": [
+                    {"id": self.g1.id, "estado": "pendiente"}
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.g1.refresh_from_db()
+        self.assertEqual(self.g1.estado, "pendiente")
+        self.assertIsNone(self.g1.fecha_cierre)
+
+
+
+
+class FechaCierreGestionTests(BaseApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.evento = self.crear_evento()
+        self.gestion = self.crear_gestion(self.evento)
+        self.url = f"/api/gestiones/{self.gestion.id}/"
+
+    def test_al_marcar_hecha_se_guarda_fecha_cierre(self):
+        antes = timezone.now()
+
+        res = self.client.patch(
+            self.url,
+            {"estado": "hecho"},
+            format="json",
+        )
+
+        despues = timezone.now()
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertIsNotNone(self.gestion.fecha_cierre)
+        self.assertGreaterEqual(self.gestion.fecha_cierre, antes)
+        self.assertLessEqual(self.gestion.fecha_cierre, despues)
+        self.assertIsNotNone(res.data["fecha_cierre"])
+
+    def test_al_reabrir_una_gestion_se_borra_fecha_cierre(self):
+        self.gestion.estado = "hecho"
+        self.gestion.fecha_cierre = timezone.now()
+        self.gestion.save()
+
+        res = self.client.patch(
+            self.url,
+            {"estado": "pendiente"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertEqual(self.gestion.estado, "pendiente")
+        self.assertIsNone(self.gestion.fecha_cierre)
+        self.assertIsNone(res.data["fecha_cierre"])
+
+    def test_al_posponer_una_gestion_hecha_se_borra_fecha_cierre(self):
+        self.gestion.estado = "hecho"
+        self.gestion.fecha_cierre = timezone.now()
+        self.gestion.save()
+
+        res = self.client.patch(
+            self.url,
+            {"estado": "pospuesto"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertEqual(self.gestion.estado, "pospuesto")
+        self.assertIsNone(self.gestion.fecha_cierre)
+
+    def test_editar_nota_de_gestion_hecha_conserva_fecha_cierre(self):
+        fecha_original = timezone.now()
+        self.gestion.estado = "hecho"
+        self.gestion.fecha_cierre = fecha_original
+        self.gestion.save()
+
+        res = self.client.patch(
+            self.url,
+            {"nota": "Confirmación recibida"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertEqual(self.gestion.nota, "Confirmación recibida")
+        self.assertEqual(self.gestion.fecha_cierre, fecha_original)
+
+    def test_fecha_cierre_no_se_puede_asignar_desde_el_cliente(self):
+        res = self.client.patch(
+            self.url,
+            {
+                "estado": "pendiente",
+                "fecha_cierre": "2026-10-13T12:00:00Z",
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertIsNone(self.gestion.fecha_cierre)
+
+    def test_nota_se_conserva_al_cambiar_estado(self):
+        self.gestion.nota = "Esperando confirmación"
+        self.gestion.save()
+
+        res = self.client.patch(
+            self.url,
+            {"estado": "hecho"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.gestion.refresh_from_db()
+        self.assertEqual(self.gestion.nota, "Esperando confirmación")
+        self.assertIsNotNone(self.gestion.fecha_cierre)
+
+
+
+class ProgresoEventoTests(BaseApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.evento = self.crear_evento()
+
+    def test_progreso_con_gestiones_hechas_pendientes_y_pospuestas(self):
+        self.crear_gestion(self.evento, estado="hecho", nombre="Hecha 1")
+        self.crear_gestion(self.evento, estado="hecho", nombre="Hecha 2")
+        self.crear_gestion(self.evento, estado="pendiente", nombre="Pendiente")
+        self.crear_gestion(self.evento, estado="pospuesto", nombre="Pospuesta")
+
+        res = self.client.get(f"/api/eventos/{self.evento.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["gestiones_hechas"], 2)
+        self.assertEqual(res.data["total_gestiones"], 4)
+        self.assertEqual(res.data["progreso_porcentaje"], 50.0)
+
+    def test_evento_sin_gestiones_tiene_progreso_cero(self):
+        self.evento.gestiones.all().delete()
+
+        res = self.client.get(f"/api/eventos/{self.evento.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["gestiones_hechas"], 0)
+        self.assertEqual(res.data["total_gestiones"], 0)
+        self.assertEqual(res.data["progreso_porcentaje"], 0)
+
+    def test_el_listado_tambien_incluye_el_progreso(self):
+        self.crear_gestion(self.evento, estado="hecho")
+        self.crear_gestion(self.evento, estado="pendiente")
+
+        res = self.client.get("/api/eventos/")
+
+        self.assertEqual(res.status_code, 200)
+
+        # El endpoint de listado devuelve una lista de eventos.
+        evento_data = next(
+            item for item in res.data if item["id"] == self.evento.id
+        )
+
+        self.assertEqual(evento_data["gestiones_hechas"], 1)
+        self.assertEqual(evento_data["total_gestiones"], 2)
+        self.assertEqual(evento_data["progreso_porcentaje"], 50.0)
+
+
+
+class ValidacionEstadoYHoyTests(BaseApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.evento = self.crear_evento()
+
+    def test_estado_invalido_devuelve_400_con_error_claro(self):
+        gestion = self.crear_gestion(self.evento)
+
+        res = self.client.patch(
+            f"/api/gestiones/{gestion.id}/",
+            {"estado": "en_proceso"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 400)
+        detalles = res.data["error"]["details"]
+        self.assertIn("estado", detalles)
+
+    def test_gestion_inexistente_devuelve_404(self):
+        res = self.client.patch(
+            "/api/gestiones/999999/",
+            {"estado": "hecho"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 404)
+
+    def test_gestion_de_otro_usuario_devuelve_404(self):
+        evento_ajeno = self.crear_evento(
+            usuario=self.otro,
+            nombre="Evento ajeno",
+        )
+        gestion_ajena = self.crear_gestion(evento_ajeno)
+
+        res = self.client.patch(
+            f"/api/gestiones/{gestion_ajena.id}/",
+            {"estado": "hecho"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 404)
+
+    def test_hoy_no_incluye_gestiones_hechas_en_pendientes(self):
+        fecha_hoy = timezone.localdate().isoformat()
+
+        hecha = self.crear_gestion(
+            self.evento,
+            fecha=fecha_hoy,
+            estado="hecho",
+            nombre="Gestión terminada",
+        )
+        pendiente = self.crear_gestion(
+            self.evento,
+            fecha=fecha_hoy,
+            estado="pendiente",
+            nombre="Gestión pendiente",
+            hora="10:00",
+        )
+
+        res = self.client.get("/api/hoy/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["filtros"]["estado"], "pendiente")
+
+        grupos = res.data["grupos"]
+        ids_devueltos = {
+            gestion["id"]
+            for grupo in grupos.values()
+            for gestion in grupo
+        }
+
+        self.assertIn(pendiente.id, ids_devueltos)
+        self.assertNotIn(hecha.id, ids_devueltos)
