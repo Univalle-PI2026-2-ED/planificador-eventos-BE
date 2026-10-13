@@ -1,0 +1,1387 @@
+openapi: 3.0.3
+info:
+  title: Planificador de Eventos API
+  version: 1.0.0
+  description: API REST del Organizador de Eventos Independientes
+paths:
+  /api/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: Valida las credenciales y devuelve el token del usuario. Si son
+        incorrectas, el mensaje llega en error.details.non_field_errors.
+      summary: Iniciar sesión
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthRespuesta'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Credenciales incorrectas o campos faltantes.
+  /api/auth/registro/:
+    post:
+      operationId: auth_registro_create
+      description: Crea una cuenta y devuelve su token, así el usuario queda con la
+        sesión iniciada. La contraseña se valida con las reglas de Django (mínimo
+        8 caracteres, no demasiado común, no solo números).
+      summary: Registrar usuario
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Registro'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Registro'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Registro'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthRespuesta'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Usuario o correo repetido, contraseña débil o campos faltantes.
+  /api/eventos/:
+    get:
+      operationId: eventos_list
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      tags:
+      - eventos
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evento'
+          description: ''
+    post:
+      operationId: eventos_create
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      tags:
+      - eventos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evento'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+          description: ''
+  /api/eventos/{id}/:
+    get:
+      operationId: eventos_retrieve
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este evento.
+        required: true
+      tags:
+      - eventos
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+          description: ''
+    put:
+      operationId: eventos_update
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este evento.
+        required: true
+      tags:
+      - eventos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evento'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+          description: ''
+    patch:
+      operationId: eventos_partial_update
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este evento.
+        required: true
+      tags:
+      - eventos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEvento'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEvento'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEvento'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+          description: ''
+    delete:
+      operationId: eventos_destroy
+      description: |-
+        GET/POST /api/eventos/
+        GET/PATCH/PUT/DELETE /api/eventos/<id>/
+        POST /api/eventos/<id>/subtareas/
+
+        Cada usuario solo ve y modifica sus propios eventos.
+
+        **Editar el plan:** en PATCH/PUT, `gestiones` es opcional. Cada elemento
+        con `id` edita esa gestión del evento; cada elemento sin `id` crea una
+        gestión nueva (nombre, fecha, hora y horas son obligatorios). Las
+        gestiones que no se mencionan no se tocan; para borrar una se usa
+        DELETE /api/gestiones/<id>/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este evento.
+        required: true
+      tags:
+      - eventos
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/eventos/{id}/subtareas/:
+    post:
+      operationId: eventos_subtareas_create
+      description: |-
+        Agrega una gestión (subtarea logística) a un evento que ya existe.
+
+        Cubre US-02 Escenario 1: 'Dado que existe un evento, cuando agrego
+        una subtarea logística con datos válidos, entonces el sistema
+        guarda la subtarea logística asociada al evento'.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este evento.
+        required: true
+      tags:
+      - eventos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evento'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evento'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+          description: ''
+  /api/gestiones/:
+    get:
+      operationId: gestiones_list
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      tags:
+      - gestiones
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Gestion'
+          description: ''
+    post:
+      operationId: gestiones_create
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      tags:
+      - gestiones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gestion'
+          description: ''
+  /api/gestiones/{id}/:
+    get:
+      operationId: gestiones_retrieve
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este gestion.
+        required: true
+      tags:
+      - gestiones
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gestion'
+          description: ''
+    put:
+      operationId: gestiones_update
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este gestion.
+        required: true
+      tags:
+      - gestiones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Gestion'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gestion'
+          description: ''
+    patch:
+      operationId: gestiones_partial_update
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este gestion.
+        required: true
+      tags:
+      - gestiones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGestion'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gestion'
+          description: ''
+    delete:
+      operationId: gestiones_destroy
+      description: |-
+        GET/POST /api/gestiones/
+        GET/PATCH/PUT/DELETE /api/gestiones/<id>/
+        POST /api/gestiones/<id>/reprogramar/
+
+        Editar, marcar y guardar nota son PATCH sobre una gestión existente
+        (el PATCH no revisa el límite de horas). Para mover una gestión de día
+        cuidando el límite, usar POST /api/gestiones/<id>/reprogramar/.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este gestion.
+        required: true
+      tags:
+      - gestiones
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/gestiones/{id}/reprogramar/:
+    post:
+      operationId: gestiones_reprogramar_create
+      description: |-
+        Mueve la gestión al día `fecha` (y opcionalmente cambia `hora` y `horas`) y la deja en estado **pendiente**.
+
+        Antes de mover, suma las horas de las gestiones del usuario que ya están ese día (sin contar las `hecho` ni la gestión que se mueve) más las horas de esta gestión. Si el total pasa el límite diario configurado por el usuario (`PreferenciasUsuario.limite_horas`) responde **409** con `fecha`, `horas` (total del día con esta gestión), `limite`, `exceso` y `gestiones` (las que ya cuentan ese día) dentro de `error.details`, y no guarda nada.
+
+        Para mover igual aunque se pase del límite, el frontend usa el PATCH genérico `/api/gestiones/<id>/`, que no valida el límite.
+      summary: Reprogramar una gestión cuidando el límite diario
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este gestion.
+        required: true
+      tags:
+      - gestiones
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reprogramar'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reprogramar'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reprogramar'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Gestion'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Fecha faltante o inválida, u horas fuera de 0,5–8.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Falta el token de autenticación.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: La gestión no existe o no es del usuario.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictoRespuesta'
+              examples:
+                DíaSobrecargado:
+                  value:
+                    success: false
+                    error:
+                      status: 409
+                      message: Ese día superaría tu límite de horas diario.
+                      details:
+                        fecha: '2026-10-12'
+                        horas: 7.5
+                        limite: 6.0
+                        exceso: 1.5
+                        gestiones:
+                        - id: 14
+                          nombre: Confirmar catering
+                          fecha: '2026-10-12'
+                          hora: 09:00:00
+                          horas: '4.00'
+                          estado: pendiente
+                          nota: ''
+                          evento:
+                            id: 3
+                            nombre: Boda de Ana y Luis
+                  summary: Día sobrecargado
+          description: El día destino superaría el límite de horas.
+  /api/health/:
+    get:
+      operationId: health_retrieve
+      summary: Estado de la API
+      tags:
+      - health
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/hoy/:
+    get:
+      operationId: hoy_retrieve
+      description: 'Devuelve las gestiones de los eventos del usuario autenticado
+        en tres grupos: **vencidas** (días anteriores, o de hoy con la hora ya pasada),
+        **para_hoy** (hoy, hora aún por llegar) y **proximas** (fechas futuras). Los
+        grupos se arman por posición en el tiempo, sin importar el estado filtrado.'
+      summary: Gestiones del usuario agrupadas por urgencia
+      parameters:
+      - in: query
+        name: dias
+        schema:
+          type: integer
+        description: Entero >= 1. Limita las próximas a los siguientes N días.
+      - in: query
+        name: estado
+        schema:
+          type: string
+          enum:
+          - hecho
+          - pendiente
+          - pospuesto
+          - todas
+          default: pendiente
+        description: Estado de las gestiones a incluir.
+      - in: query
+        name: orden
+        schema:
+          type: string
+          enum:
+          - esfuerzo
+          - hora
+          default: hora
+        description: '''hora'': por fecha y hora. ''esfuerzo'': más horas estimadas
+          primero.'
+      tags:
+      - hoy
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoyRespuesta'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Filtro con valor no válido.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Falta el token de autenticación.
+  /api/preferencias/:
+    get:
+      operationId: preferencias_retrieve
+      description: |-
+        GET/PATCH /api/preferencias/
+
+        Preferencias del usuario autenticado. Si todavía no tiene, se crean
+        con los valores por defecto (límite de 6 horas al día).
+      summary: Ver preferencias del usuario
+      tags:
+      - preferencias
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferencias'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Falta el token de autenticación.
+    patch:
+      operationId: preferencias_partial_update
+      description: Cambia el límite de horas al día (entre 1 y 12, pasos de 0.5 en
+        el formulario).
+      summary: Actualizar preferencias del usuario
+      tags:
+      - preferencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPreferencias'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPreferencias'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPreferencias'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferencias'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Límite fuera del rango 1–12 o no numérico.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRespuesta'
+          description: Falta el token de autenticación.
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - ht
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components:
+  schemas:
+    AuthRespuesta:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 'Úsalo en el header: Authorization: Token <token>'
+        user:
+          $ref: '#/components/schemas/Usuario'
+      required:
+      - token
+      - user
+    ConflictoError:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        details:
+          $ref: '#/components/schemas/ConflictoSobrecargaDetalle'
+      required:
+      - details
+      - message
+      - status
+    ConflictoRespuesta:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          $ref: '#/components/schemas/ConflictoError'
+      required:
+      - error
+    ConflictoSobrecargaDetalle:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+          description: Día destino que se pasaría del límite.
+        horas:
+          type: number
+          format: double
+          description: Horas que tendría ese día con la gestión incluida.
+        limite:
+          type: number
+          format: double
+          description: Límite de horas al día que se aplicó.
+        exceso:
+          type: number
+          format: double
+          description: 'Horas que se pasa: horas - limite.'
+        gestiones:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionHoy'
+          description: Gestiones que ya cuentan ese día (sin incluir la que se mueve).
+      required:
+      - exceso
+      - fecha
+      - gestiones
+      - horas
+      - limite
+    ErrorDetalle:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: {}
+          description: Errores por campo, o 'detail' en errores generales.
+      required:
+      - details
+      - message
+      - status
+    ErrorRespuesta:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          $ref: '#/components/schemas/ErrorDetalle'
+      required:
+      - error
+    EstadoEnum:
+      enum:
+      - pendiente
+      - hecho
+      - pospuesto
+      type: string
+      description: |-
+        * `pendiente` - Pendiente
+        * `hecho` - Hecho
+        * `pospuesto` - Pospuesto
+    Evento:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Fecha del evento (YYYY-MM-DD)
+        gestiones:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionEvento'
+        gestiones_hechas:
+          type: integer
+          readOnly: true
+          description: Cantidad de gestiones cuyo estado es hecho.
+        total_gestiones:
+          type: integer
+          readOnly: true
+          description: Cantidad total de gestiones del evento, incluidas las pospuestas.
+        progreso_porcentaje:
+          type: number
+          format: double
+          readOnly: true
+          description: Porcentaje de gestiones completadas, de 0 a 100.
+      required:
+      - fecha
+      - gestiones
+      - gestiones_hechas
+      - id
+      - nombre
+      - progreso_porcentaje
+      - total_gestiones
+    EventoResumen:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+      required:
+      - id
+      - nombre
+    Gestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Día en que se hará la gestión (YYYY-MM-DD)
+        hora:
+          type: string
+          format: time
+          description: Hora de la gestión (HH:MM)
+        horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          description: Horas estimadas que tomará (entre 0.5 y 8)
+        estado:
+          $ref: '#/components/schemas/EstadoEnum'
+        nota:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Fecha de cierre
+      required:
+      - fecha
+      - fecha_cierre
+      - hora
+      - horas
+      - id
+      - nombre
+    GestionEvento:
+      type: object
+      description: |-
+        Gestión dentro de un evento. Acepta 'id' para editar una gestión que
+        ya existe; sin 'id' se crea una nueva.
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Día en que se hará la gestión (YYYY-MM-DD)
+        hora:
+          type: string
+          format: time
+          description: Hora de la gestión (HH:MM)
+        horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          description: Horas estimadas que tomará (entre 0.5 y 8)
+        estado:
+          $ref: '#/components/schemas/EstadoEnum'
+        nota:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Fecha de cierre
+      required:
+      - fecha
+      - fecha_cierre
+      - hora
+      - horas
+      - nombre
+    GestionHoy:
+      type: object
+      description: Gestión con el evento embebido, como lo usa Hoy.jsx (g.evento.id
+        / g.evento.nombre).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Día en que se hará la gestión (YYYY-MM-DD)
+        hora:
+          type: string
+          format: time
+          description: Hora de la gestión (HH:MM)
+        horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          description: Horas estimadas que tomará (entre 0.5 y 8)
+        estado:
+          $ref: '#/components/schemas/EstadoEnum'
+        nota:
+          type: string
+        evento:
+          allOf:
+          - $ref: '#/components/schemas/EventoResumen'
+          readOnly: true
+      required:
+      - evento
+      - fecha
+      - hora
+      - horas
+      - id
+      - nombre
+    HoyFiltros:
+      type: object
+      properties:
+        estado:
+          type: string
+        orden:
+          type: string
+        dias:
+          type: integer
+          nullable: true
+      required:
+      - dias
+      - estado
+      - orden
+    HoyGrupos:
+      type: object
+      properties:
+        vencidas:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionHoy'
+        para_hoy:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionHoy'
+        proximas:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionHoy'
+      required:
+      - para_hoy
+      - proximas
+      - vencidas
+    HoyRespuesta:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        hora:
+          type: string
+          description: HH:MM, hora local usada para clasificar.
+        filtros:
+          $ref: '#/components/schemas/HoyFiltros'
+        resumen:
+          $ref: '#/components/schemas/HoyResumen'
+        grupos:
+          $ref: '#/components/schemas/HoyGrupos'
+      required:
+      - fecha
+      - filtros
+      - grupos
+      - hora
+      - resumen
+    HoyResumen:
+      type: object
+      properties:
+        vencidas:
+          type: integer
+        para_hoy:
+          type: integer
+        proximas:
+          type: integer
+      required:
+      - para_hoy
+      - proximas
+      - vencidas
+    Login:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+    PatchedEvento:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Fecha del evento (YYYY-MM-DD)
+        gestiones:
+          type: array
+          items:
+            $ref: '#/components/schemas/GestionEvento'
+        gestiones_hechas:
+          type: integer
+          readOnly: true
+          description: Cantidad de gestiones cuyo estado es hecho.
+        total_gestiones:
+          type: integer
+          readOnly: true
+          description: Cantidad total de gestiones del evento, incluidas las pospuestas.
+        progreso_porcentaje:
+          type: number
+          format: double
+          readOnly: true
+          description: Porcentaje de gestiones completadas, de 0 a 100.
+    PatchedGestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 200
+        fecha:
+          type: string
+          format: date
+          description: Día en que se hará la gestión (YYYY-MM-DD)
+        hora:
+          type: string
+          format: time
+          description: Hora de la gestión (HH:MM)
+        horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          description: Horas estimadas que tomará (entre 0.5 y 8)
+        estado:
+          $ref: '#/components/schemas/EstadoEnum'
+        nota:
+          type: string
+        fecha_cierre:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Fecha de cierre
+    PatchedPreferencias:
+      type: object
+      properties:
+        limite_horas:
+          type: number
+          format: double
+          maximum: 12
+          minimum: 1
+    Preferencias:
+      type: object
+      properties:
+        limite_horas:
+          type: number
+          format: double
+          maximum: 12
+          minimum: 1
+      required:
+      - limite_horas
+    Registro:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: Nombre de usuario
+          description: 'Requerido. 150 carácteres como máximo. Únicamente letras,
+            dígitos y @/./+/-/_ '
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Dirección de correo electrónico
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - id
+      - password
+      - username
+    Reprogramar:
+      type: object
+      description: Datos para mover una gestión a otro día.
+      properties:
+        fecha:
+          type: string
+          format: date
+          description: Día destino (YYYY-MM-DD)
+        hora:
+          type: string
+          format: time
+          description: Nueva hora (HH:MM). Si se omite, conserva la actual.
+        horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          description: Nuevas horas estimadas (0,5 a 8). Si se omite, conserva las
+            actuales.
+      required:
+      - fecha
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - id
+      - username
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"

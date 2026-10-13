@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 
 from .models import (
     LIMITE_HORAS_MAX,
@@ -103,11 +104,26 @@ class GestionEventoSerializer(GestionSerializer):
 class EventoSerializer(serializers.ModelSerializer):
     gestiones = GestionEventoSerializer(many=True)
     
-    gestiones_hechas = serializers.SerializerMethodField()
-    total_gestiones = serializers.SerializerMethodField()
-    progreso_porcentaje = serializers.SerializerMethodField()
+    gestiones_hechas = serializers.SerializerMethodField(
+        help_text="Cantidad de gestiones cuyo estado es hecho.",
+    )
 
+    total_gestiones = serializers.SerializerMethodField(
+        help_text="Cantidad total de gestiones del evento, incluidas las pospuestas.",
+    )
 
+    progreso_porcentaje = serializers.SerializerMethodField(
+        help_text="Porcentaje de gestiones completadas, de 0 a 100.",
+    )
+
+    def get_fields(self):
+        fields = super().get_fields()
+
+        fields["gestiones_hechas"].read_only = True
+        fields["total_gestiones"].read_only = True
+        fields["progreso_porcentaje"].read_only = True
+
+        return fields
     
     class Meta:
         model = Evento
@@ -122,15 +138,20 @@ class EventoSerializer(serializers.ModelSerializer):
         ]
 
     
+    @extend_schema_field(serializers.IntegerField())
     def get_total_gestiones(self, obj):
         return len(obj.gestiones.all())
 
+
+    @extend_schema_field(serializers.IntegerField())
     def get_gestiones_hechas(self, obj):
         return sum(
             gestion.estado == Gestion.Estado.HECHO
             for gestion in obj.gestiones.all()
         )
 
+
+    @extend_schema_field(serializers.FloatField())
     def get_progreso_porcentaje(self, obj):
         gestiones = list(obj.gestiones.all())
         total = len(gestiones)
