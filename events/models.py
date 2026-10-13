@@ -109,8 +109,16 @@ class Gestion(models.Model):
     )
     nota = models.TextField(blank=True, default="")
 
+    fecha_cierre = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="fecha de cierre",
+    )
+
     class Meta:
         ordering = ["fecha", "hora"]
 
     def __str__(self):
         return f"{self.nombre} ({self.evento.nombre})"
+
+    

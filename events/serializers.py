@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
+from django.utils import timezone
 
 from .models import (
     LIMITE_HORAS_MAX,
@@ -45,10 +46,21 @@ def _campo_limite_horas(**kwargs):
     )
 
 
+
 class GestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Gestion
-        fields = ["id", "nombre", "fecha", "hora", "horas", "estado", "nota"]
+        fields = [
+            "id",
+            "nombre",
+            "fecha",
+            "hora",
+            "horas",
+            "estado",
+            "nota",
+            "fecha_cierre",
+        ]
+        read_only_fields = ["fecha_cierre"]
 
     def validate_nombre(self, value):
         if not value.strip():
@@ -60,6 +72,26 @@ class GestionSerializer(serializers.ModelSerializer):
     def validate_horas(self, value):
         return validar_horas_gestion(value)
 
+    def update(self, instance, validated_data):
+        estado_anterior = instance.estado
+        nuevo_estado = validated_data.get("estado", estado_anterior)
+
+        if (
+            estado_anterior != Gestion.Estado.HECHO
+            and nuevo_estado == Gestion.Estado.HECHO
+        ):
+            # Se completa por primera vez o se vuelve a completar.
+            instance.fecha_cierre = timezone.now()
+
+        elif (
+            estado_anterior == Gestion.Estado.HECHO
+            and nuevo_estado != Gestion.Estado.HECHO
+        ):
+            # Se reabre la gestión: ya no debe tener fecha de cierre.
+            instance.fecha_cierre = None
+
+        return super().update(instance, validated_data)
+
 
 class GestionEventoSerializer(GestionSerializer):
     """Gestión dentro de un evento. Acepta 'id' para editar una gestión que
@@ -70,10 +102,50 @@ class GestionEventoSerializer(GestionSerializer):
 
 class EventoSerializer(serializers.ModelSerializer):
     gestiones = GestionEventoSerializer(many=True)
+    
+    gestiones_hechas = serializers.SerializerMethodField()
+    total_gestiones = serializers.SerializerMethodField()
+    progreso_porcentaje = serializers.SerializerMethodField()
 
+
+    
     class Meta:
         model = Evento
-        fields = ["id", "nombre", "fecha", "gestiones"]
+        fields = [
+            "id",
+            "nombre",
+            "fecha",
+            "gestiones",
+            "gestiones_hechas",
+            "total_gestiones",
+            "progreso_porcentaje",
+        ]
+
+    
+    def get_total_gestiones(self, obj):
+        return len(obj.gestiones.all())
+
+    def get_gestiones_hechas(self, obj):
+        return sum(
+            gestion.estado == Gestion.Estado.HECHO
+            for gestion in obj.gestiones.all()
+        )
+
+    def get_progreso_porcentaje(self, obj):
+        gestiones = list(obj.gestiones.all())
+        total = len(gestiones)
+
+        if total == 0:
+            return 0
+
+        hechas = sum(
+            gestion.estado == Gestion.Estado.HECHO
+            for gestion in gestiones
+        )
+
+        return round((hechas / total) * 100, 2)
+
+
 
     def validate_nombre(self, value):
         nombre = value.strip()
@@ -160,16 +232,39 @@ class EventoSerializer(serializers.ModelSerializer):
                 gestion_id = datos.pop("id", None)
 
                 if gestion_id is None:
+                    nuevo_estado = datos.get(
+                        "estado", Gestion.Estado.PENDIENTE
+                    )
+                    if nuevo_estado == Gestion.Estado.HECHO:
+                        datos["fecha_cierre"] = timezone.now()
+
                     nuevas.append(Gestion(evento=instance, **datos))
                 else:
                     gestion = existentes[gestion_id]
+                    estado_anterior = gestion.estado
+                    nuevo_estado = datos.get("estado", estado_anterior)
+
+                    if (
+                        estado_anterior != Gestion.Estado.HECHO
+                        and nuevo_estado == Gestion.Estado.HECHO
+                    ):
+                        gestion.fecha_cierre = timezone.now()
+                    elif (
+                        estado_anterior == Gestion.Estado.HECHO
+                        and nuevo_estado != Gestion.Estado.HECHO
+                    ):
+                        gestion.fecha_cierre = None
 
                     for campo, valor in datos.items():
                         setattr(gestion, campo, valor)
 
                     gestion.save()
 
+
             Gestion.objects.bulk_create(nuevas)
+
+        if hasattr(instance, "_prefetched_objects_cache"):
+            instance._prefetched_objects_cache = {}
 
         return instance
 class PreferenciasSerializer(serializers.ModelSerializer):
