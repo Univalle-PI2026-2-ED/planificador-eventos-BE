@@ -8,7 +8,7 @@ from django.db import models
 # Mismo rango y valor por defecto que el formulario del frontend (Crear.jsx)
 LIMITE_HORAS_DEFECTO = 6
 LIMITE_HORAS_MIN = 1
-LIMITE_HORAS_MAX = 12
+LIMITE_HORAS_MAX = 16
 
 def validar_paso_media_hora(value):
     """El límite debe aumentar en pasos de 0,5 horas."""
@@ -102,7 +102,7 @@ class Gestion(models.Model):
     horas = models.DecimalField(
         max_digits=4,
         decimal_places=2,
-        help_text="Horas estimadas que tomará (entre 0.5 y 8)",
+        help_text="Horas estimadas que tomará (entre 0.5 y 16)",
     )
     estado = models.CharField(
         max_length=20, choices=Estado.choices, default=Estado.PENDIENTE
