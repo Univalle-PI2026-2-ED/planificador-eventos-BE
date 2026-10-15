@@ -17,12 +17,12 @@ from .models import (
 )
 
 HORAS_GESTION_MIN = Decimal("0.5")
-HORAS_GESTION_MAX = Decimal("8")
+HORAS_GESTION_MAX = Decimal("16")
 CAMPOS_GESTION_OBLIGATORIOS = ("nombre", "fecha", "hora", "horas")
 
 
 def validar_horas_gestion(value):
-    """Horas estimadas de una gestión: entre 0,5 y 8."""
+    """Horas estimadas de una gestión: entre 0,5 y 16."""
     if value < HORAS_GESTION_MIN or value > HORAS_GESTION_MAX:
         raise serializers.ValidationError(
             "El tiempo estimado debe estar entre 0,5 y 8 horas."
@@ -31,7 +31,7 @@ def validar_horas_gestion(value):
 
 
 def _campo_limite_horas(**kwargs):
-    """Campo de límite de horas al día (1–12), igual que el formulario."""
+    """Campo de límite de horas al día (1–16), igual que el formulario."""
     return serializers.DecimalField(
         max_digits=4,
         decimal_places=2,
@@ -298,7 +298,7 @@ class PreferenciasSerializer(serializers.ModelSerializer):
     def validate_limite_horas(self, value):
         if (value * 2) % 1 != 0:
             raise serializers.ValidationError(
-                "El límite debe estar entre 1 y 12 horas, "
+                "El límite debe estar entre 1 y 16 horas, "
                 "en incrementos de 0,5."
             )
 
@@ -315,7 +315,7 @@ class ReprogramarSerializer(serializers.Serializer):
         max_digits=4,
         decimal_places=2,
         required=False,
-        help_text="Nuevas horas estimadas (0,5 a 8). Si se omite, conserva las actuales.",
+        help_text="Nuevas horas estimadas (0,5 a 16). Si se omite, conserva las actuales.",
     )
 
     def validate_horas(self, value):

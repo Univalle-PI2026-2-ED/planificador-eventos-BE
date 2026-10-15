@@ -142,7 +142,7 @@ class GestionViewSet(viewsets.ModelViewSet):
             200: GestionSerializer,
             400: OpenApiResponse(
                 response=ErrorRespuestaSerializer,
-                description="Fecha faltante o inválida, u horas fuera de 0,5–8.",
+                description="Fecha faltante o inválida, u horas fuera de 0,5–16.",
             ),
             401: OpenApiResponse(
                 response=ErrorRespuestaSerializer,
@@ -467,13 +467,13 @@ class PreferenciasView(generics.RetrieveUpdateAPIView):
     @extend_schema(
         tags=["preferencias"],
         summary="Actualizar preferencias del usuario",
-        description="Cambia el límite de horas al día (entre 1 y 12, pasos de 0.5 en el formulario).",
+        description="Cambia el límite de horas al día (entre 1 y 16, pasos de 0.5 en el formulario).",
         request=PreferenciasSerializer,
         responses={
             200: PreferenciasSerializer,
             400: OpenApiResponse(
                 response=ErrorRespuestaSerializer,
-                description="Límite fuera del rango 1–12 o no numérico.",
+                description="Límite fuera del rango 1–16 o no numérico.",
             ),
             401: OpenApiResponse(
                 response=ErrorRespuestaSerializer,
