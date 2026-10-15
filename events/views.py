@@ -200,13 +200,23 @@ class GestionViewSet(viewsets.ModelViewSet):
         limite = PreferenciasUsuario.de_usuario(request.user).limite_horas
 
         with transaction.atomic():
+            
             del_dia = list(
-                Gestion.objects.filter(evento__usuario=request.user, fecha=fecha)
-                .exclude(estado=Gestion.Estado.HECHO)
+                Gestion.objects.filter(
+                    evento__usuario=request.user,
+                    fecha=fecha,
+                )
+                .exclude(
+                    estado__in=[
+                        Gestion.Estado.HECHO,
+                        Gestion.Estado.POSPUESTO,
+                    ]
+                )
                 .exclude(pk=gestion.pk)
                 .select_related("evento")
                 .order_by("hora")
             )
+
             ya_planeado = sum((g.horas for g in del_dia), Decimal("0"))
             total = ya_planeado + horas
 
