@@ -51,13 +51,13 @@ class PreferenciasTests(BaseApiTestCase):
             PreferenciasUsuario.de_usuario(self.user).limite_horas, Decimal("8.50")
         )
 
-    def test_acepta_los_extremos_1_y_12(self):
-        for valor in ("1", "12"):
+    def test_acepta_los_extremos_1_y_16(self):
+        for valor in ("1", "16"):
             res = self.client.patch(self.url, {"limite_horas": valor}, format="json")
             self.assertEqual(res.status_code, 200, valor)
 
-    def test_rechaza_limite_fuera_de_1_a_12(self):
-        for valor in ("0", "0.5", "12.5", "13", "-3"):
+    def test_rechaza_limite_fuera_de_1_a_16(self):
+        for valor in ("0", "0.5", "16.5", "17", "-3"):
             res = self.client.patch(self.url, {"limite_horas": valor}, format="json")
             self.assertEqual(res.status_code, 400, valor)
             self.assertIn("limite_horas", res.data["error"]["details"])
@@ -182,12 +182,12 @@ class HorasDeGestionTests(BaseApiTestCase):
             format="json",
         )
 
-    def test_acepta_de_0_5_a_8(self):
-        for valor in ("0.5", "4", "8"):
+    def test_acepta_de_0_5_a_16(self):
+        for valor in ("0.5", "4", "16"):
             self.assertEqual(self.nueva(valor).status_code, 201, valor)
 
-    def test_rechaza_fuera_de_0_5_a_8(self):
-        for valor in ("0", "0.25", "0.4", "8.5", "9", "-1"):
+    def test_rechaza_fuera_de_0_5_a_16(self):
+        for valor in ("0", "0.25", "0.4", "16.5", "17", "-1"):
             res = self.nueva(valor)
             self.assertEqual(res.status_code, 400, valor)
             self.assertIn("horas", res.data["error"]["details"])
@@ -195,7 +195,7 @@ class HorasDeGestionTests(BaseApiTestCase):
     def test_patch_de_horas_tambien_valida(self):
         gestion = self.crear_gestion(self.evento)
         res = self.client.patch(
-            f"/api/gestiones/{gestion.id}/", {"horas": "9"}, format="json"
+            f"/api/gestiones/{gestion.id}/", {"horas": "17"}, format="json"
         )
         self.assertEqual(res.status_code, 400)
         res = self.client.patch(
@@ -210,7 +210,7 @@ class HorasDeGestionTests(BaseApiTestCase):
                 "nombre": "Fiesta",
                 "fecha": "2026-12-20",
                 "gestiones": [
-                    {"nombre": "Sonido", "fecha": "2026-12-10", "hora": "10:00", "horas": "9"}
+                    {"nombre": "Sonido", "fecha": "2026-12-10", "hora": "10:00", "horas": "17"}
                 ],
             },
             format="json",
@@ -273,10 +273,11 @@ class ReprogramarTests(BaseApiTestCase):
         res = self.client.post(self.url(), {"fecha": "2026-10-12"}, format="json")
         self.assertEqual(res.status_code, 200)
 
-    def test_las_pospuestas_si_cuentan(self):
+    def test_las_pospuestas_no_cuentan(self):
+        # US-08: posponer retira la gestión del cálculo de horas del día
         self.crear_gestion(self.evento, fecha="2026-10-12", horas="5", estado="pospuesto")
         res = self.client.post(self.url(), {"fecha": "2026-10-12"}, format="json")
-        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.status_code, 200)
 
     def test_cuentan_las_gestiones_de_otros_eventos_del_usuario(self):
         otro_evento = self.crear_evento(nombre="Bautizo")
@@ -351,7 +352,7 @@ class ReprogramarTests(BaseApiTestCase):
         self.assertEqual(res.status_code, 400)
 
     def test_horas_fuera_de_rango_o_texto_dan_400(self):
-        for valor in ("0.4", "8.5", "abc"):
+        for valor in ("0.4", "16.5", "abc"):
             res = self.client.post(
                 self.url(), {"fecha": "2026-10-15", "horas": valor}, format="json"
             )
@@ -442,7 +443,7 @@ class EditarEventoAgregarGestionesTests(BaseApiTestCase):
 
     def test_gestion_nueva_valida_las_horas(self):
         res = self.client.patch(
-            self.url, {"gestiones": [self.nueva(horas="9")]}, format="json"
+            self.url, {"gestiones": [self.nueva(horas="17")]}, format="json"
         )
         self.assertEqual(res.status_code, 400)
 
