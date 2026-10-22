@@ -146,7 +146,7 @@ USE_SQLITE=True python manage.py test
 En Render, `RENDER_EXTERNAL_HOSTNAME` se agrega solo a `ALLOWED_HOSTS`.
 
 ## Despliegue (Render)
-- **Build command:** `pip install -r requirements.txt && python manage.py migrate`
+- **Build command:** `pip install -r requirements.txt`
 - **Start command:** `gunicorn config.wsgi:application`
 - Variables de entorno: `SECRET_KEY`, `DEBUG=False` y las `DB_*` de Supabase.
 - CORS permite `http://localhost:5173` y `https://planificador-eventos-fe.vercel.app`.
