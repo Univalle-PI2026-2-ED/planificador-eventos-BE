@@ -7,15 +7,14 @@ sobrecarga diaria al reprogramar y el progreso de preparación de cada evento.
 - **Estado de la API:** https://planificador-eventos-be.onrender.com/api/health/
 - **Documentación interactiva (Swagger):** https://planificador-eventos-be.onrender.com/api/docs/
 - **App publicada (frontend):** https://planificador-eventos-fe.vercel.app
-- **Repositorio del frontend:** [link-al-repo-frontend]
+- **Repositorio del frontend:** https://github.com/Univalle-PI2026-2-ED/planificador-eventos-FE
 
 > El backend está en el plan gratuito de Render: si lleva rato sin uso, la primera
 > petición puede tardar hasta 1 minuto en responder. Espera y vuelve a intentar.
 
 ## Cuenta de prueba
-- Usuario: `[usuario-demo]`
-- Correo: `[correo-demo]`
-- Contraseña: `[contraseña-demo]`
+- Correo: `pollo123@gmail.com`
+- Contraseña: `Felipe1707+`
 
 La cuenta ya tiene eventos y gestiones cargados.
 
@@ -23,9 +22,8 @@ La cuenta ya tiene eventos y gestiones cargados.
 1. Abre https://planificador-eventos-be.onrender.com/api/docs/
 2. En `POST /api/auth/login/` pulsa **Try it out** y envía:
 ```json
-   { "email": "[correo-demo]", "password": "[contraseña-demo]" }
+   { "email": "pollo123@gmail.com", "password": "Felipe1707+" }
 ```
-   (también acepta `"username"` en lugar de `"email"`).
 3. Copia el `token` de la respuesta, pulsa **Authorize** (arriba a la derecha) y
    escribe: `Token <tu-token>` (con la palabra `Token`, un espacio y el token).
 4. Ya puedes probar el resto de endpoints, por ejemplo:
@@ -108,48 +106,27 @@ Todos los errores responden con la misma estructura:
 | 409 | Reprogramar superaría el límite diario de horas |
 
 ## Cómo correrlo en local
-1. Instala Python 3.12 o superior.
-2. Clona el repositorio y entra a la carpeta:
 ```bash
-   git clone [link-al-repo-backend]
-   cd planificador-eventos-BE
+git clone https://github.com/Univalle-PI2026-2-ED/planificador-eventos-BE.git
+cd planificador-eventos-BE
+python -m venv venv
+venv\Scripts\activate        # macOS/Linux: source venv/bin/activate
+pip install -r requirements.txt
 ```
-3. Crea y activa un entorno virtual:
+Crea un archivo `.env` en la raíz con:
+```
+USE_SQLITE=True
+DEBUG=True
+SECRET_KEY=cualquier-clave-local
+```
+Luego:
 ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # macOS / Linux
-   source venv/bin/activate
+python manage.py migrate
+python manage.py runserver
 ```
-4. Instala dependencias:
-```bash
-   pip install -r requirements.txt
-```
-5. Crea un archivo `.env` en la raíz. Para probar rápido con SQLite:
-```
-   USE_SQLITE=True
-   DEBUG=True
-   SECRET_KEY=cualquier-clave-local
-```
-   Para usar PostgreSQL:
-```
-   SECRET_KEY=tu-clave-secreta
-   DEBUG=True
-   DB_NAME=postgres
-   DB_USER=tu-usuario
-   DB_PASSWORD=tu-contraseña
-   DB_HOST=tu-host
-   DB_PORT=5432
-```
-6. Aplica las migraciones y arranca el servidor:
-```bash
-   python manage.py migrate
-   python manage.py runserver
-```
-7. Abre http://localhost:8000/api/docs/
+Abre http://localhost:8000/api/docs/
 
-## Pruebas
+Para correr las pruebas:
 ```bash
 # Windows (PowerShell)
 $env:USE_SQLITE="True"; python manage.py test
@@ -171,11 +148,11 @@ En Render, `RENDER_EXTERNAL_HOSTNAME` se agrega solo a `ALLOWED_HOSTS`.
 ## Despliegue (Render)
 - **Build command:** `pip install -r requirements.txt && python manage.py migrate`
 - **Start command:** `gunicorn config.wsgi:application`
-- Variables de entorno: las de la tabla anterior, con `DEBUG=False`.
+- Variables de entorno: `SECRET_KEY`, `DEBUG=False` y las `DB_*` de Supabase.
 - CORS permite `http://localhost:5173` y `https://planificador-eventos-fe.vercel.app`.
 
 ## Equipo
 - Daniel Andrés Micolta Góngora
-- Thomas Herrera Parra — BackEnd Lead
+- Thomas Herrera Parra
 - Yoel Steven Montoya Hernández
 - Andrés Felipe Muñoz Castro
