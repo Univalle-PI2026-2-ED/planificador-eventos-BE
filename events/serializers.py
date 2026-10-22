@@ -25,7 +25,7 @@ def validar_horas_gestion(value):
     """Horas estimadas de una gestión: entre 0,5 y 16."""
     if value < HORAS_GESTION_MIN or value > HORAS_GESTION_MAX:
         raise serializers.ValidationError(
-            "El tiempo estimado debe estar entre 0,5 y 8 horas."
+            "El tiempo estimado debe estar entre 0,5 y 16 horas."
         )
     return value
 
