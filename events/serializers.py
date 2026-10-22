@@ -429,6 +429,8 @@ class AuthRespuestaSerializer(serializers.Serializer):
 
 class ErrorDetalleSerializer(serializers.Serializer):
     status = serializers.IntegerField()
+    code = serializers.CharField(help_text="Código interno del error, p. ej. NOT_FOUND.")
+    trace_id = serializers.CharField(help_text="ID único para rastrear esta falla en los logs.")
     message = serializers.CharField()
     details = serializers.DictField(
         help_text="Errores por campo, o 'detail' en errores generales."
@@ -454,6 +456,8 @@ class ConflictoSobrecargaDetalleSerializer(serializers.Serializer):
 
 class ConflictoErrorSerializer(serializers.Serializer):
     status = serializers.IntegerField()
+    code = serializers.CharField(help_text="Código interno del error, p. ej. NOT_FOUND.")
+    trace_id = serializers.CharField(help_text="ID único para rastrear esta falla en los logs.")
     message = serializers.CharField()
     details = ConflictoSobrecargaDetalleSerializer()
 
